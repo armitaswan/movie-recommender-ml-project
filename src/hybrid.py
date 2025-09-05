@@ -44,4 +44,12 @@ class HybridRecommender:
 
         items = [(i, sc) for i, sc in agg.items() if i not in exclude_seen]
         items.sort(key=lambda x: -x[1])
-        return items[:k]
+        # همچنین مؤلفه‌های نرمال‌شده‌ی CF و CB را برگردانیم برای UI
+        comp = {}
+        for i, s in s_cf: comp.setdefault(i, [0.0,0.0])[0] = float(s)
+        for i, s in s_cb: comp.setdefault(i, [0.0,0.0])[1] = float(s)
+        out = []
+        for i, sc in items[:k]:
+            c = comp.get(i, [0.0,0.0])
+            out.append((i, float(sc), float(c[0]), float(c[1])))
+        return out

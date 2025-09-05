@@ -5,6 +5,7 @@ import joblib
 
 from .content_based import ContentIndexer
 from .collaborative import CFRecommender
+from .neighborhood import KNNRecommender, KNNConfig
 from .baselines import imdb_wr
 
 MODELS = Path(__file__).resolve().parents[1] / "models"
@@ -31,6 +32,12 @@ def main(alpha: float, k: int):
     cf = CFRecommender()
     cf.fit(ratings)
     cf.save(str(MODELS))
+
+    # Neighborhood (item-item kNN)
+    knn = KNNRecommender(KNNConfig())
+    knn.fit(ratings)
+    knn.save(str(MODELS))
+
 
     joblib.dump({"alpha": alpha, "k": k}, MODELS / "hybrid_cfg.joblib")
     print("Training complete.")

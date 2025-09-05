@@ -1,5 +1,6 @@
 import gradio as gr
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import joblib
 
@@ -16,8 +17,14 @@ cf = CFRecommender.load(str(MODELS))
 cfg = joblib.load(MODELS / "hybrid_cfg.joblib")
 hy = HybridRecommender(cb, cf, HybridCfg(alpha=cfg["alpha"]))
 
-movies = pd.read_parquet(DATA / "movies_joined.parquet")[["movieId","title","genres","cast"]]
+movies = pd.read_parquet(DATA / "movies_joined.parquet")[["movieId","title","genres","cast","poster_path"]]
 ratings = pd.read_parquet(DATA / "ratings.parquet")
+
+def _poster_url(row):
+    p = row.get("poster_path")
+    if isinstance(p, str) and p.strip():
+        return f"https://image.tmdb.org/t/p/w185{p}"
+    return None
 
 def _explain(row):
     g = row["genres"][:3] if isinstance(row["genres"], list) else []
@@ -37,12 +44,24 @@ def recommend(uid, fav_titles, k):
         pseudo = pd.DataFrame({"movieId": fav["movieId"], "rating": 5.0})
         uv = cb.build_user(pseudo, movies)
 
-    items = hy.recommend(user_id=uid, user_profile_vec=uv, k=k, exclude_seen=seen)
-    out = []
-    for mid, score in items:
-        row = movies[movies["movieId"] == mid].iloc[0]
-        out.append([row["title"], float(score), _explain(row)])
-    return pd.DataFrame(out, columns=["Title","Score","Why this"])
+    items = hy.recommend(user_id=uid, user_profile_vec=uv, k=k, exclude_seen=seen)  # (mid, score, cf_z, cb_z)
+    cards = []
+    table = []
+    for mid, score, cfz, cbz in items:
+        row = movies[movies["movieId"] == mid].iloc[0].to_dict()
+        url = _poster_url(row)
+        title = row.get("title","(unknown)")
+        why = _explain(row)
+        cb_share = (cbz / (abs(cfz) + abs(cbz) + 1e-9))
+        # کارت گالری
+        if url:
+            cards.append((url, f"{title}\nCB share: {cb_share:.2f}\n{why}"))
+        else:
+            cards.append((None, f"{title}\nCB share: {cb_share:.2f}\n{why}"))
+        # جدول
+        table.append([title, float(score), float(cfz), float(cbz), why, url or ""])
+    df = pd.DataFrame(table, columns=["Title","Score","CF_z","CB_z","Why this","Poster URL"])
+    return cards, df
 
 with gr.Blocks(title="Movie Recommender (Hybrid)") as demo:
     gr.Markdown("# 🎬 Movie Recommender — Hybrid (CB + CF)")
@@ -51,7 +70,8 @@ with gr.Blocks(title="Movie Recommender (Hybrid)") as demo:
         fav = gr.Textbox(label="Favorite titles (comma-separated)")
         k = gr.Slider(5, 30, value=10, step=1, label="How many?")
     btn = gr.Button("Recommend")
-    out = gr.Dataframe(headers=["Title","Score","Why this"], datatype=["str","number","str"], interactive=False)
+    gallery = gr.Gallery(label="Top-K with posters").style(grid=[5], height="auto")
+    out = gr.Dataframe(headers=["Title","Score","CF_z","CB_z","Why this","Poster URL"], interactive=False)
 
     def _wrap(uid_val, fav_val, k_val):
         try:
@@ -60,7 +80,7 @@ with gr.Blocks(title="Movie Recommender (Hybrid)") as demo:
             uid_i = None
         return recommend(uid_i, fav_val, int(k_val))
 
-    btn.click(_wrap, [uid, fav, k], out)
+    btn.click(_wrap, [uid, fav, k], [gallery, out])
 
 if __name__ == "__main__":
     demo.launch()

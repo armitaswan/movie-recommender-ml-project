@@ -50,7 +50,7 @@ def prepare_movies():
         if col in movies:
             movies[col] = pd.to_numeric(movies[col], errors="coerce")
 
-    keep = ["id","imdb_id","title","overview","tagline","genres","keywords","cast","crew",
+    keep = ["id","imdb_id","title","overview","tagline","poster_path","genres","keywords","cast","crew",
             "original_language","runtime","budget","revenue","popularity","vote_average","vote_count"]
     movies = movies[keep]
 
