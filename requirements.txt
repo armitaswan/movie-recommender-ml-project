@@ -5,5 +5,5 @@ scipy==1.11.4
 tqdm==4.66.4
 joblib==1.4.2
 scikit-surprise==1.1.4
-gradio==4.36.1
+gradio==4.44.1
 matplotlib==3.8.4
